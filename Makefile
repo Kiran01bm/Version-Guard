@@ -14,7 +14,6 @@ TPARSE := $(shell go env GOPATH)/bin/tparse
 CYAN  := \033[36m
 RESET := \033[0m
 
-
 # ── Help ──────────────────────────────────────────────────────────────────────
 
 .PHONY: help
@@ -128,14 +127,14 @@ vet: ## Run go vet
 .PHONY: fmt
 fmt: ## Format all Go files
 	@echo "📝 Formatting Go files..."
-	@find . -name '*.go' -not -path './vendor/*' -not -path './protos/squareup/*' | xargs gofmt -l -w
+	@find . -name '*.go' -not -path './vendor/*' -not -path './protos/block/*' | xargs gofmt -l -w
 	@echo "✅ Formatting complete"
 
 .PHONY: fmt-imports
 fmt-imports: ## Format imports with goimports
 	@echo "📦 Formatting imports..."
 	@command -v goimports >/dev/null 2>&1 || (echo "Installing goimports..." && go install golang.org/x/tools/cmd/goimports@latest)
-	@find . -name '*.go' -not -path './vendor/*' -not -path './protos/squareup/*' | xargs goimports -local github.com/squareup/version-guard -w
+	@find . -name '*.go' -not -path './vendor/*' -not -path './protos/block/*' | xargs goimports -local github.com/block/Version-Guard -w
 	@echo "✅ Import formatting complete"
 
 .PHONY: fmt-all
@@ -183,13 +182,13 @@ run-server: build ## Run gRPC server locally
 .PHONY: docker-build
 docker-build: ## Build Docker image
 	@echo "🐳 Building Docker image..."
-	@docker build -t squareup/version-guard:latest .
-	@echo "✅ Docker image built: squareup/version-guard:latest"
+	@docker build -t block/version-guard:latest .
+	@echo "✅ Docker image built: block/version-guard:latest"
 
 .PHONY: docker-run
 docker-run: docker-build ## Run Docker container locally
 	@echo "🐳 Running Docker container..."
-	@docker run -p 8080:8080 --env-file .env squareup/version-guard:latest
+	@docker run -p 8080:8080 --env-file .env block/version-guard:latest
 
 # ── Deployment ────────────────────────────────────────────────────────────────
 
@@ -273,7 +272,7 @@ todo: ## List all TODO/FIXME/HACK comments
 .PHONY: lines
 lines: ## Count lines of code
 	@echo "📏 Counting lines of code..."
-	@find . -name '*.go' -not -path './vendor/*' -not -path './protos/squareup/*' | xargs wc -l | tail -1
+	@find . -name '*.go' -not -path './vendor/*' -not -path './protos/block/*' | xargs wc -l | tail -1
 
 # ── Database (Future) ─────────────────────────────────────────────────────────
 

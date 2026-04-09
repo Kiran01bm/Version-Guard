@@ -1,12 +1,11 @@
 # golangci-lint configuration for Version Guard
-# Based on Square's Go linting standards
 
 run:
   timeout: 5m
   tests: true
   skip-dirs:
     - vendor
-    - protos/squareup  # Generated protobuf code
+    - protos/block  # Generated protobuf code
   skip-files:
     - ".*\\.pb\\.go$"  # Skip generated protobuf files
 
@@ -23,7 +22,7 @@ linters-settings:
     simplify: true
 
   goimports:
-    local-prefixes: github.com/squareup/version-guard
+    local-prefixes: github.com/block/Version-Guard
 
   gocritic:
     enabled-tags:
