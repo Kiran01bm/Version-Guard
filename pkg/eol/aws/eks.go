@@ -111,7 +111,15 @@ func (p *EKSEOLProvider) GetVersionLifecycle(ctx context.Context, engine, versio
 	}
 
 	// Version not found - return unknown lifecycle (empty Version signals missing data)
-	// Policy will classify as UNKNOWN (data gap) rather than RED/YELLOW (user issue)
+	//
+	// Design Decision: Return lifecycle with empty Version rather than error
+	// Rationale:
+	//   - Maintains observability: Resource tracked with UNKNOWN status vs lost entirely
+	//   - Graceful degradation: Workflow continues during partial API outages
+	//   - Policy decides: EOL provider fetches data, policy layer interprets "unknown"
+	//
+	// Alternative (rejected): Return error - would cause workflow to skip resource,
+	// losing visibility into resources with incomplete EOL data coverage.
 	return &types.VersionLifecycle{
 		Version:     "", // Empty = unknown data, not unsupported version
 		Engine:      engine,
@@ -272,8 +280,22 @@ func enrichWithLifecycleDates(ctx context.Context, version *EKSVersion, eolClien
 	updateStatusFromDates(version)
 }
 
-// enrichFromEndOfLife attempts to enrich version data from endoflife.date API
-// Returns true if successful, false if data not found or API error
+// enrichFromEndOfLife attempts to enrich version data from endoflife.date cycles
+// Returns true if successful, false if data not found
+//
+// WARNING: Amazon EKS uses a NON-STANDARD schema on endoflife.date
+//
+// Standard endoflife.date semantics:
+//   - cycle.EOL = true end of life date
+//   - cycle.Support = end of standard support
+//
+// Amazon EKS DEVIATION (non-standard):
+//   - cycle.EOL = end of STANDARD support (NOT true EOL!)
+//   - cycle.ExtendedSupport = end of EXTENDED support (true EOL)
+//   - cycle.Support = often empty/missing
+//
+// This is why EKS MUST use EKSEOLProvider with this custom field mapping
+// instead of the generic endoflife.Provider (which would interpret dates incorrectly).
 func enrichFromEndOfLife(ctx context.Context, version *EKSVersion, client endoflife.Client) bool {
 	cycles, err := client.GetProductCycles(ctx, "amazon-eks")
 	if err != nil {
@@ -294,12 +316,7 @@ func enrichFromEndOfLife(ctx context.Context, version *EKSVersion, client endofl
 			}
 		}
 
-		// For Amazon EKS, endoflife.date has a special schema:
-		// - "eol" field = end of STANDARD support (not true EOL)
-		// - "extendedSupport" field = end of EXTENDED support (true EOL)
-		// - "support" field is often empty/missing for EKS
-
-		// End of standard support from EOL field (EKS-specific)
+		// End of standard support from EOL field (EKS NON-STANDARD mapping!)
 		if version.EndOfStandardDate == nil && cycle.EOL != "" && cycle.EOL != "false" {
 			if eolDate, err := time.Parse("2006-01-02", cycle.EOL); err == nil {
 				version.EndOfStandardDate = &eolDate
