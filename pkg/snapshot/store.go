@@ -239,10 +239,12 @@ func (s *S3Store) ListSnapshots(ctx context.Context, limit int) ([]*SnapshotMeta
 				meta.SnapshotID = val
 			}
 			if val, ok := headResult.Metadata["total-resources"]; ok {
-				fmt.Sscanf(val, "%d", &meta.TotalResources)
+				// Ignore scan error - if parsing fails, field remains zero
+				_, _ = fmt.Sscanf(val, "%d", &meta.TotalResources)
 			}
 			if val, ok := headResult.Metadata["compliance-percentage"]; ok {
-				fmt.Sscanf(val, "%f", &meta.CompliancePercentage)
+				// Ignore scan error - if parsing fails, field remains zero
+				_, _ = fmt.Sscanf(val, "%f", &meta.CompliancePercentage)
 			}
 
 			if obj.LastModified != nil {

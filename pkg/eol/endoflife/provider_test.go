@@ -364,8 +364,8 @@ func TestProvider_BlocksNonStandardSchema(t *testing.T) {
 
 // Helper function for string contains
 func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 ||
-		(len(s) > 0 && len(substr) > 0 && indexOfSubstring(s, substr) >= 0))
+	return len(s) >= len(substr) && (s == substr || substr == "" ||
+		(s != "" && substr != "" && indexOfSubstring(s, substr) >= 0))
 }
 
 func indexOfSubstring(s, substr string) int {

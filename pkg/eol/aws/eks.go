@@ -31,6 +31,13 @@ type EKSVersion struct {
 	LatestPlatformVersion string     // Latest platform version for this K8s version
 }
 
+// EKS version status constants
+const (
+	eksStatusStandard   = "standard"
+	eksStatusExtended   = "extended"
+	eksStatusDeprecated = "deprecated"
+)
+
 // EKSEOLProvider fetches EOL data from AWS EKS API
 //
 //nolint:govet // field alignment sacrificed for readability
@@ -178,7 +185,11 @@ func (p *EKSEOLProvider) ListAllVersions(ctx context.Context, engine string) ([]
 		return nil, err
 	}
 
-	return result.([]*types.VersionLifecycle), nil
+	versions, ok := result.([]*types.VersionLifecycle)
+	if !ok {
+		return nil, errors.New("failed to convert result to VersionLifecycle slice")
+	}
+	return versions, nil
 }
 
 // convertAWSVersion converts an AWS EKSVersion to our VersionLifecycle type
@@ -206,17 +217,17 @@ func (p *EKSEOLProvider) convertAWSVersion(av *EKSVersion) *types.VersionLifecyc
 	status := strings.ToLower(av.Status)
 
 	switch status {
-	case "standard":
+	case eksStatusStandard:
 		lifecycle.IsSupported = true
 		lifecycle.IsDeprecated = false
 		lifecycle.IsEOL = false
 
-	case "extended":
+	case eksStatusExtended:
 		lifecycle.IsSupported = true
 		lifecycle.IsExtendedSupport = true
 		lifecycle.IsDeprecated = true
 
-	case "deprecated":
+	case eksStatusDeprecated:
 		lifecycle.IsDeprecated = true
 		lifecycle.IsSupported = false
 
@@ -388,14 +399,14 @@ func enrichWithStaticDates(version *EKSVersion) {
 // updateStatusFromDates updates version status based on lifecycle dates
 func updateStatusFromDates(version *EKSVersion) {
 	// Update status based on dates if not already set
-	if version.Status == "" || version.Status == "extended" || version.Status == "standard" {
+	if version.Status == "" || version.Status == eksStatusExtended || version.Status == eksStatusStandard {
 		now := time.Now()
 		if version.EndOfExtendedDate != nil && now.After(*version.EndOfExtendedDate) {
-			version.Status = "deprecated"
+			version.Status = eksStatusDeprecated
 		} else if version.EndOfStandardDate != nil && now.After(*version.EndOfStandardDate) {
-			version.Status = "extended"
+			version.Status = eksStatusExtended
 		} else if version.Status == "" {
-			version.Status = "standard"
+			version.Status = eksStatusStandard
 		}
 	}
 }

@@ -154,7 +154,11 @@ func (p *RDSEOLProvider) ListAllVersions(ctx context.Context, engine string) ([]
 		return nil, err
 	}
 
-	return result.([]*types.VersionLifecycle), nil
+	versions, ok := result.([]*types.VersionLifecycle)
+	if !ok {
+		return nil, errors.New("failed to convert result to VersionLifecycle slice")
+	}
+	return versions, nil
 }
 
 // convertAWSVersion converts an AWS EngineVersion to our VersionLifecycle type

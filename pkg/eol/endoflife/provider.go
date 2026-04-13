@@ -48,6 +48,11 @@ var ProductsWithNonStandardSchema = []string{
 	"amazon-eks", // cycle.EOL = end of standard support (NOT true EOL!)
 }
 
+const (
+	providerName = "endoflife-date-api"
+	falseBool    = "false"
+)
+
 // Provider fetches EOL data from endoflife.date API
 //
 //nolint:govet // field alignment sacrificed for readability
@@ -80,7 +85,7 @@ func NewProvider(client Client, cacheTTL time.Duration) *Provider {
 
 // Name returns the name of this provider
 func (p *Provider) Name() string {
-	return "endoflife-date-api"
+	return providerName
 }
 
 // Engines returns the list of supported engines
@@ -163,7 +168,7 @@ func (p *Provider) ListAllVersions(ctx context.Context, engine string) ([]*types
 
 	// Check cache first (fast path)
 	p.mu.RLock()
-	if cached, ok := p.cache[cacheKey]; ok {
+	if cached, found := p.cache[cacheKey]; found {
 		if time.Since(cached.fetchedAt) < p.cacheTTL {
 			versions := cached.versions
 			p.mu.RUnlock()
@@ -207,7 +212,11 @@ func (p *Provider) ListAllVersions(ctx context.Context, engine string) ([]*types
 		return nil, err
 	}
 
-	return result.([]*types.VersionLifecycle), nil
+	versions, ok := result.([]*types.VersionLifecycle)
+	if !ok {
+		return nil, errors.New("failed to convert result to VersionLifecycle slice")
+	}
+	return versions, nil
 }
 
 // convertCycle converts a ProductCycle to our VersionLifecycle type
@@ -240,7 +249,7 @@ func (p *Provider) convertCycle(engine, product string, cycle *ProductCycle) (*t
 
 	// Parse EOL date (STANDARD semantics: true end of life)
 	var eolDate *time.Time
-	if cycle.EOL != "" && cycle.EOL != "false" {
+	if cycle.EOL != "" && cycle.EOL != falseBool {
 		if parsed, err := parseDate(cycle.EOL); err == nil {
 			eolDate = &parsed
 			lifecycle.EOLDate = eolDate
@@ -249,7 +258,7 @@ func (p *Provider) convertCycle(engine, product string, cycle *ProductCycle) (*t
 
 	// Parse support date (STANDARD semantics: end of standard support)
 	var supportDate *time.Time
-	if cycle.Support != "" && cycle.Support != "false" {
+	if cycle.Support != "" && cycle.Support != falseBool {
 		if parsed, err := parseDate(cycle.Support); err == nil {
 			supportDate = &parsed
 			lifecycle.DeprecationDate = supportDate
@@ -261,7 +270,7 @@ func (p *Provider) convertCycle(engine, product string, cycle *ProductCycle) (*t
 	if cycle.ExtendedSupport != nil {
 		switch v := cycle.ExtendedSupport.(type) {
 		case string:
-			if v != "" && v != "false" {
+			if v != "" && v != falseBool {
 				if parsed, err := parseDate(v); err == nil {
 					extendedSupportDate = &parsed
 					lifecycle.ExtendedSupportEnd = extendedSupportDate
