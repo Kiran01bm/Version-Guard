@@ -115,6 +115,9 @@ type VersionLifecycle struct {
 
 // Finding represents a detected version drift issue
 type Finding struct {
+	// Tags are the resource's key-value metadata (e.g., AWS resource tags)
+	Tags map[string]string `json:",omitempty"`
+
 	// EOLDate is when the current version reaches End-of-Life
 	EOLDate *time.Time
 

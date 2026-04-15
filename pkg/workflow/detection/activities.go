@@ -237,6 +237,7 @@ func (a *Activities) DetectDrift(ctx context.Context, input DetectInput) (*Detec
 			Message:        message,
 			Recommendation: recommendation,
 			EOLDate:        lifecycle.EOLDate,
+			Tags:           resource.Tags,
 		}
 
 		findings = append(findings, finding)
