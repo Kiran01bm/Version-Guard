@@ -21,6 +21,107 @@ type SchemaAdapter interface {
 //   - cycle.extendedSupport → ExtendedSupportEnd
 type StandardSchemaAdapter struct{}
 
+// lifecycleDates holds parsed date values for lifecycle calculations
+type lifecycleDates struct {
+	eol             *time.Time
+	support         *time.Time
+	extendedSupport *time.Time
+}
+
+// parseCycleDates extracts and parses dates from a ProductCycle
+func (a *StandardSchemaAdapter) parseCycleDates(cycle *ProductCycle) lifecycleDates {
+	dates := lifecycleDates{}
+
+	// Parse EOL date (STANDARD semantics: true end of life)
+	if dateStr := anyToDateString(cycle.EOL); dateStr != "" {
+		if parsed, err := parseDate(dateStr); err == nil {
+			dates.eol = &parsed
+		}
+	}
+
+	// Parse support date (STANDARD semantics: end of standard support)
+	if dateStr := anyToDateString(cycle.Support); dateStr != "" {
+		if parsed, err := parseDate(dateStr); err == nil {
+			dates.support = &parsed
+		}
+	}
+
+	// Parse extended support
+	if cycle.ExtendedSupport != nil {
+		dates.extendedSupport = a.parseExtendedSupport(cycle.ExtendedSupport, dates.eol)
+	}
+
+	return dates
+}
+
+// parseExtendedSupport handles the extended support field which can be string or bool
+func (a *StandardSchemaAdapter) parseExtendedSupport(extSupport interface{}, eolDate *time.Time) *time.Time {
+	switch v := extSupport.(type) {
+	case string:
+		if v != "" && v != falseBool {
+			if parsed, err := parseDate(v); err == nil {
+				return &parsed
+			}
+		}
+	case bool:
+		// If boolean true, use EOL date as extended support end
+		if v && eolDate != nil {
+			return eolDate
+		}
+	}
+	return nil
+}
+
+// setLifecycleStatus determines lifecycle status flags based on dates
+func (a *StandardSchemaAdapter) setLifecycleStatus(lifecycle *types.VersionLifecycle, dates lifecycleDates) {
+	now := time.Now()
+
+	// If we have an EOL date and we're past it, mark as EOL
+	if dates.eol != nil && now.After(*dates.eol) {
+		lifecycle.IsEOL = true
+		lifecycle.IsSupported = false
+		lifecycle.IsDeprecated = true
+		return
+	}
+
+	// If we have extended support end and we're past standard support
+	if dates.extendedSupport != nil && dates.support != nil && now.After(*dates.support) {
+		a.setExtendedSupportStatus(lifecycle, dates, now)
+		return
+	}
+
+	// If we're past support date but no extended support info
+	if dates.support != nil && now.After(*dates.support) {
+		lifecycle.IsDeprecated = true
+		lifecycle.IsSupported = false
+		// If we have EOL date and not past it yet, not EOL
+		if dates.eol != nil && now.Before(*dates.eol) {
+			lifecycle.IsEOL = false
+		}
+		return
+	}
+
+	// Still in standard support
+	lifecycle.IsSupported = true
+	lifecycle.IsDeprecated = false
+	lifecycle.IsEOL = false
+}
+
+// setExtendedSupportStatus handles status when in or past extended support window
+func (a *StandardSchemaAdapter) setExtendedSupportStatus(lifecycle *types.VersionLifecycle, dates lifecycleDates, now time.Time) {
+	if now.Before(*dates.extendedSupport) {
+		// In extended support window
+		lifecycle.IsSupported = true
+		lifecycle.IsExtendedSupport = true
+		lifecycle.IsDeprecated = true
+	} else {
+		// Past extended support
+		lifecycle.IsEOL = true
+		lifecycle.IsSupported = false
+		lifecycle.IsDeprecated = true
+	}
+}
+
 // AdaptCycle converts a ProductCycle to VersionLifecycle using standard semantics
 func (a *StandardSchemaAdapter) AdaptCycle(cycle *ProductCycle) (*types.VersionLifecycle, error) {
 	lifecycle := &types.VersionLifecycle{
@@ -37,86 +138,16 @@ func (a *StandardSchemaAdapter) AdaptCycle(cycle *ProductCycle) (*types.VersionL
 		}
 	}
 
-	// Parse EOL date (STANDARD semantics: true end of life)
-	var eolDate *time.Time
-	if dateStr := anyToDateString(cycle.EOL); dateStr != "" {
-		if parsed, err := parseDate(dateStr); err == nil {
-			eolDate = &parsed
-			lifecycle.EOLDate = eolDate
-		}
-	}
+	// Parse lifecycle dates
+	dates := a.parseCycleDates(cycle)
 
-	// Parse support date (STANDARD semantics: end of standard support)
-	var supportDate *time.Time
-	if dateStr := anyToDateString(cycle.Support); dateStr != "" {
-		if parsed, err := parseDate(dateStr); err == nil {
-			supportDate = &parsed
-			lifecycle.DeprecationDate = supportDate
-		}
-	}
+	// Set dates on lifecycle
+	lifecycle.EOLDate = dates.eol
+	lifecycle.DeprecationDate = dates.support
+	lifecycle.ExtendedSupportEnd = dates.extendedSupport
 
-	// Parse extended support
-	var extendedSupportDate *time.Time
-	if cycle.ExtendedSupport != nil {
-		switch v := cycle.ExtendedSupport.(type) {
-		case string:
-			if v != "" && v != falseBool {
-				if parsed, err := parseDate(v); err == nil {
-					extendedSupportDate = &parsed
-					lifecycle.ExtendedSupportEnd = extendedSupportDate
-				}
-			}
-		case bool:
-			// If boolean true, use EOL date as extended support end
-			if v && eolDate != nil {
-				extendedSupportDate = eolDate
-				lifecycle.ExtendedSupportEnd = eolDate
-			}
-		}
-	}
-
-	// Determine lifecycle status based on dates
-	now := time.Now()
-
-	// If we have an EOL date and we're past it, mark as EOL
-	if eolDate != nil && now.After(*eolDate) {
-		lifecycle.IsEOL = true
-		lifecycle.IsSupported = false
-		lifecycle.IsDeprecated = true
-		return lifecycle, nil
-	}
-
-	// If we have extended support end and we're past standard support
-	if extendedSupportDate != nil && supportDate != nil && now.After(*supportDate) {
-		if now.Before(*extendedSupportDate) {
-			// In extended support window
-			lifecycle.IsSupported = true
-			lifecycle.IsExtendedSupport = true
-			lifecycle.IsDeprecated = true
-		} else {
-			// Past extended support
-			lifecycle.IsEOL = true
-			lifecycle.IsSupported = false
-			lifecycle.IsDeprecated = true
-		}
-		return lifecycle, nil
-	}
-
-	// If we're past support date but no extended support info
-	if supportDate != nil && now.After(*supportDate) {
-		lifecycle.IsDeprecated = true
-		lifecycle.IsSupported = false
-		// If we have EOL date, use it; otherwise mark as deprecated but not EOL
-		if eolDate != nil && now.Before(*eolDate) {
-			lifecycle.IsEOL = false
-		}
-		return lifecycle, nil
-	}
-
-	// Still in standard support
-	lifecycle.IsSupported = true
-	lifecycle.IsDeprecated = false
-	lifecycle.IsEOL = false
+	// Determine lifecycle status
+	a.setLifecycleStatus(lifecycle, dates)
 
 	return lifecycle, nil
 }

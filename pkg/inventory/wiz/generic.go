@@ -15,11 +15,20 @@ import (
 	"github.com/block/Version-Guard/pkg/types"
 )
 
+const (
+	resourceTypeEKS = "eks"
+)
+
+// contextKey is a custom type for context keys to avoid collisions
+type contextKey string
+
+const discoveredAtKey contextKey = "discovered_at"
+
 // GenericInventorySource is a config-driven Wiz inventory source
 // that can handle any resource type based on YAML configuration
 type GenericInventorySource struct {
 	client         *Client
-	config         config.ResourceConfig
+	config         *config.ResourceConfig
 	registryClient registry.Client
 	logger         *slog.Logger
 }
@@ -27,7 +36,7 @@ type GenericInventorySource struct {
 // NewGenericInventorySource creates a new generic inventory source from config
 func NewGenericInventorySource(
 	client *Client,
-	cfg config.ResourceConfig,
+	cfg *config.ResourceConfig,
 	registryClient registry.Client,
 	logger *slog.Logger,
 ) *GenericInventorySource {
@@ -205,8 +214,8 @@ func (s *GenericInventorySource) parseResourceRow(
 	}
 
 	// For EKS, default to "eks" if no engine field is mapped
-	if s.config.Type == "eks" && engine == "" {
-		engine = "eks"
+	if s.config.Type == resourceTypeEKS && engine == "" {
+		engine = resourceTypeEKS
 	}
 
 	// Normalize engine
@@ -234,7 +243,7 @@ func (s *GenericInventorySource) parseResourceRow(
 
 	// Build resource
 	discoveredAt := time.Now()
-	if ctxTime, ok := ctx.Value("discovered_at").(time.Time); ok {
+	if ctxTime, ok := ctx.Value(discoveredAtKey).(time.Time); ok {
 		discoveredAt = ctxTime
 	}
 
@@ -298,10 +307,10 @@ func normalizeEngine(engine, resourceType string) string {
 	case "elasticache":
 		// Redis → redis, Valkey → valkey, Memcached → memcached
 		return engine
-	case "eks":
+	case resourceTypeEKS:
 		// Kubernetes → eks
 		if strings.Contains(engine, "k8s") || strings.Contains(engine, "kubernetes") {
-			return "eks"
+			return resourceTypeEKS
 		}
 	}
 

@@ -157,6 +157,8 @@ make dev
 
 ### Trigger a Scan
 
+**Start a detection workflow:**
+
 ```bash
 # Via Temporal CLI (from inside the temporal container if using docker-compose)
 docker compose exec temporal temporal workflow start \
@@ -167,6 +169,46 @@ docker compose exec temporal temporal workflow start \
   --namespace version-guard-dev
 
 # Or via the Temporal Web UI at http://localhost:8233 → Start Workflow
+```
+
+**Monitor workflow execution:**
+
+```bash
+# Check workflow status (replace WORKFLOW_ID with the ID from the start command)
+docker compose exec temporal temporal workflow describe \
+  --workflow-id <WORKFLOW_ID> \
+  --namespace version-guard-dev
+
+# Watch Version Guard logs in real-time
+docker compose logs --follow version-guard
+
+# View Temporal Web UI for detailed workflow execution
+# Open http://localhost:8233 → Workflows → Select your workflow
+```
+
+**Example successful workflow output:**
+```
+Status: COMPLETED
+Total Findings: 8,386 resources scanned
+Compliance: 45.36%
+Runtime: 29.35 seconds
+
+Resource Breakdown:
+- aurora: 4,257 findings
+- eks: 155 findings (65 GREEN, 90 YELLOW)
+- elasticache: 3,974 findings (3,739 GREEN, 138 YELLOW, 97 UNKNOWN)
+```
+
+**Verify snapshot creation:**
+
+Snapshots are stored in MinIO (local S3) at `s3://version-guard-snapshots/snapshots/YYYY/MM/DD/{workflow-id}.json`:
+
+```bash
+# List snapshots (from logs)
+docker compose logs version-guard | grep "Snapshot created"
+
+# Access MinIO Console to browse snapshots
+# Open http://localhost:9001 (default credentials: minioadmin/minioadmin)
 ```
 
 ### Query Findings

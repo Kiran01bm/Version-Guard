@@ -33,7 +33,8 @@ func validateConfig(config *ResourcesConfig) error {
 		return errors.New("version is required")
 	}
 
-	for i, resource := range config.Resources {
+	for i := range config.Resources {
+		resource := &config.Resources[i]
 		if resource.ID == "" {
 			return errors.Errorf("resource[%d]: id is required", i)
 		}

@@ -17,9 +17,9 @@ type ResourceConfig struct {
 
 // InventoryConfig defines inventory source configuration
 type InventoryConfig struct {
+	FieldMappings     map[string]string `yaml:"field_mappings"`
 	Source            string            `yaml:"source"`
 	NativeTypePattern string            `yaml:"native_type_pattern"`
-	FieldMappings     map[string]string `yaml:"field_mappings"`
 }
 
 // EOLConfig defines EOL provider configuration

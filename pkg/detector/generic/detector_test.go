@@ -133,7 +133,7 @@ func TestNewDetector(t *testing.T) {
 	policy := &MockVersionPolicy{}
 	logger := slog.Default()
 
-	detector := NewDetector(cfg, inventory, eol, policy, logger)
+	detector := NewDetector(&cfg, inventory, eol, policy, logger)
 
 	assert.NotNil(t, detector)
 	assert.Equal(t, "test-resource-detector", detector.Name())
@@ -146,7 +146,7 @@ func TestNewDetector_NilLogger(t *testing.T) {
 		Type: "aurora",
 	}
 
-	detector := NewDetector(cfg, nil, nil, nil, nil)
+	detector := NewDetector(&cfg, nil, nil, nil, nil)
 
 	assert.NotNil(t, detector)
 	assert.NotNil(t, detector.logger) // Should use default logger
@@ -164,7 +164,7 @@ func TestDetect_NoResources(t *testing.T) {
 		},
 	}
 
-	detector := NewDetector(cfg, inventory, nil, nil, nil)
+	detector := NewDetector(&cfg, inventory, nil, nil, nil)
 
 	findings, err := detector.Detect(context.Background())
 	require.NoError(t, err)
@@ -192,13 +192,13 @@ func TestDetect_SingleResourceGreen(t *testing.T) {
 
 	futureDate := time.Now().AddDate(2, 0, 0)
 	testLifecycle := &types.VersionLifecycle{
-		Version:          "16.1",
-		Engine:           "aurora-postgresql",
-		EOLDate:          &futureDate,
-		DeprecationDate:  &futureDate,
-		IsSupported:      true,
-		IsDeprecated:     false,
-		IsEOL:            false,
+		Version:         "16.1",
+		Engine:          "aurora-postgresql",
+		EOLDate:         &futureDate,
+		DeprecationDate: &futureDate,
+		IsSupported:     true,
+		IsDeprecated:    false,
+		IsEOL:           false,
 	}
 
 	inventory := &MockInventorySource{
@@ -227,7 +227,7 @@ func TestDetect_SingleResourceGreen(t *testing.T) {
 		},
 	}
 
-	detector := NewDetector(cfg, inventory, eol, policy, nil)
+	detector := NewDetector(&cfg, inventory, eol, policy, nil)
 
 	findings, err := detector.Detect(context.Background())
 	require.NoError(t, err)
@@ -301,7 +301,7 @@ func TestDetect_MultipleResources(t *testing.T) {
 		},
 	}
 
-	detector := NewDetector(cfg, inventory, eol, policy, nil)
+	detector := NewDetector(&cfg, inventory, eol, policy, nil)
 
 	findings, err := detector.Detect(context.Background())
 	require.NoError(t, err)
@@ -368,7 +368,7 @@ func TestDetect_ContinuesOnError(t *testing.T) {
 		},
 	}
 
-	detector := NewDetector(cfg, inventory, eol, policy, nil)
+	detector := NewDetector(&cfg, inventory, eol, policy, nil)
 
 	findings, err := detector.Detect(context.Background())
 	require.NoError(t, err)

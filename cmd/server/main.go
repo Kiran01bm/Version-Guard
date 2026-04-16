@@ -221,7 +221,8 @@ func (s *ServerCLI) Run(_ *kong.Context) error {
 	invSources := make(map[types.ResourceType]inventory.InventorySource)
 	eolProviders := make(map[types.ResourceType]eol.Provider)
 
-	for _, resourceCfg := range resourcesConfig.Resources {
+	for i := range resourcesConfig.Resources {
+		resourceCfg := &resourcesConfig.Resources[i]
 		fmt.Printf("  Configuring %s (%s)...\n", resourceCfg.ID, resourceCfg.Type)
 
 		// Create inventory source

@@ -84,9 +84,9 @@ func TestStandardSchemaAdapter_ExtendedSupport(t *testing.T) {
 	cycle := &ProductCycle{
 		Cycle:           "13.0",
 		ReleaseDate:     "2021-01-15",
-		Support:         time.Date(pastYear, 1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Past
+		Support:         time.Date(pastYear, 1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),     // Past
 		EOL:             time.Date(futureYear+2, 1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Future
-		ExtendedSupport: time.Date(futureYear, 1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Future (as string)
+		ExtendedSupport: time.Date(futureYear, 1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),   // Future (as string)
 	}
 
 	lifecycle, err := adapter.AdaptCycle(cycle)
@@ -108,7 +108,7 @@ func TestStandardSchemaAdapter_ExtendedSupportBoolean(t *testing.T) {
 	cycle := &ProductCycle{
 		Cycle:           "13.0",
 		ReleaseDate:     "2021-01-15",
-		Support:         time.Date(pastYear, 1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Past
+		Support:         time.Date(pastYear, 1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),   // Past
 		EOL:             time.Date(futureYear, 1, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Future
 		ExtendedSupport: true,
 	}
@@ -148,7 +148,7 @@ func TestEKSSchemaAdapter_CurrentVersion(t *testing.T) {
 	cycle := &ProductCycle{
 		Cycle:       "1.31",
 		ReleaseDate: "2024-11-15",
-		Support:     time.Date(futureYear, 11, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Future
+		Support:     time.Date(futureYear, 11, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),  // Future
 		EOL:         time.Date(futureYear+1, 5, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Future (extended support end in EKS)
 	}
 
@@ -177,7 +177,7 @@ func TestEKSSchemaAdapter_InExtendedSupport(t *testing.T) {
 	cycle := &ProductCycle{
 		Cycle:       "1.28",
 		ReleaseDate: "2023-09-15",
-		Support:     time.Date(pastYear, 9, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Past
+		Support:     time.Date(pastYear, 9, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"),   // Past
 		EOL:         time.Date(futureYear, 3, 15, 0, 0, 0, 0, time.UTC).Format("2006-01-02"), // Future (extended support end)
 	}
 

@@ -22,7 +22,7 @@ func TestNewGenericInventorySource(t *testing.T) {
 		CloudProvider: "aws",
 	}
 
-	source := NewGenericInventorySource(client, cfg, nil, nil)
+	source := NewGenericInventorySource(client, &cfg, nil, nil)
 
 	assert.NotNil(t, source)
 	assert.Equal(t, "wiz-test-resource", source.Name())
@@ -62,7 +62,7 @@ func TestGenericInventorySource_CloudProvider(t *testing.T) {
 			cfg := config.ResourceConfig{
 				CloudProvider: tt.cloudProvider,
 			}
-			source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+			source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 			assert.Equal(t, tt.expectedResult, source.CloudProvider())
 		})
 	}
@@ -74,8 +74,8 @@ func TestGetReportIDFromMap(t *testing.T) {
 		envValue     string
 		resourceID   string
 		expectedID   string
-		expectError  bool
 		errorMessage string
+		expectError  bool
 	}{
 		{
 			name:        "Valid JSON with matching resource ID",
@@ -203,7 +203,7 @@ func TestMatchesNativeTypePattern(t *testing.T) {
 					NativeTypePattern: tt.pattern,
 				},
 			}
-			source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+			source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 			result := source.matchesNativeTypePattern(tt.nativeType)
 			assert.Equal(t, tt.shouldMatch, result)
 		})
@@ -288,13 +288,13 @@ func TestParseResourceRow(t *testing.T) {
 		},
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 
 	cols := columnIndex{
-		colHeaderExternalID: 0,
-		colHeaderName:       1,
-		colHeaderAccountID:  2,
-		colHeaderRegion:     3,
+		colHeaderExternalID:      0,
+		colHeaderName:            1,
+		colHeaderAccountID:       2,
+		colHeaderRegion:          3,
 		"versionDetails.version": 4,
 		"typeFields.kind":        5,
 		colHeaderTags:            6,
@@ -304,12 +304,12 @@ func TestParseResourceRow(t *testing.T) {
 
 	row := []string{
 		"arn:aws:rds:us-west-2:123456789012:cluster:my-cluster", // external_id
-		"my-cluster",           // name
-		"123456789012",         // account_id
-		"us-west-2",            // region
-		"15.3",                 // version
-		"AuroraPostgreSQL",     // engine
-		tagsJSON,               // tags
+		"my-cluster",       // name
+		"123456789012",     // account_id
+		"us-west-2",        // region
+		"15.3",             // version
+		"AuroraPostgreSQL", // engine
+		tagsJSON,           // tags
 	}
 
 	ctx := context.Background()
@@ -335,7 +335,7 @@ func TestParseResourceRow_MissingRequiredFields(t *testing.T) {
 		CloudProvider: "aws",
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 
 	cols := columnIndex{
 		colHeaderName: 0,
@@ -357,7 +357,7 @@ func TestParseResourceRow_FallbackToExternalIDForName(t *testing.T) {
 		CloudProvider: "aws",
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 
 	cols := columnIndex{
 		colHeaderExternalID: 0,
@@ -388,7 +388,7 @@ func TestGetRequiredColumns(t *testing.T) {
 		},
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 	columns := source.getRequiredColumns()
 
 	// Check base columns
@@ -411,7 +411,7 @@ func TestGetRequiredColumns_NoMappings(t *testing.T) {
 		},
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 	columns := source.getRequiredColumns()
 
 	// Should still have base columns
@@ -426,7 +426,7 @@ func TestListResources_UnsupportedResourceType(t *testing.T) {
 		Type: "aurora",
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 
 	ctx := context.Background()
 	_, err := source.ListResources(ctx, types.ResourceType("eks"))
@@ -444,7 +444,7 @@ func TestListResources_NoReportID(t *testing.T) {
 		Type: "aurora",
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 
 	ctx := context.Background()
 	_, err := source.ListResources(ctx, types.ResourceType("aurora"))
@@ -466,7 +466,7 @@ func TestListResources_ReportIDNotInMap(t *testing.T) {
 		Type: "aurora",
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 
 	ctx := context.Background()
 	_, err := source.ListResources(ctx, types.ResourceType("aurora"))
@@ -486,7 +486,7 @@ func TestGetResource(t *testing.T) {
 		Type: "aurora",
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 
 	ctx := context.Background()
 	_, err := source.GetResource(ctx, types.ResourceType("aurora"), "test-id")
@@ -501,7 +501,7 @@ func TestParseResourceRow_WithContextTime(t *testing.T) {
 		CloudProvider: "aws",
 	}
 
-	source := NewGenericInventorySource(&Client{}, cfg, nil, nil)
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
 
 	cols := columnIndex{
 		colHeaderExternalID: 0,
@@ -516,7 +516,7 @@ func TestParseResourceRow_WithContextTime(t *testing.T) {
 	}
 
 	expectedTime := time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC)
-	ctx := context.WithValue(context.Background(), "discovered_at", expectedTime)
+	ctx := context.WithValue(context.Background(), discoveredAtKey, expectedTime)
 
 	resource, err := source.parseResourceRow(ctx, cols, row)
 

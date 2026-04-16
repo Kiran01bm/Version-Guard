@@ -16,7 +16,7 @@ import (
 
 // Detector is a config-driven generic detector that works for any resource type
 type Detector struct {
-	config    config.ResourceConfig
+	config    *config.ResourceConfig
 	inventory inventory.InventorySource
 	eol       eol.Provider
 	policy    policy.VersionPolicy
@@ -25,7 +25,7 @@ type Detector struct {
 
 // NewDetector creates a new generic detector from configuration
 func NewDetector(
-	cfg config.ResourceConfig,
+	cfg *config.ResourceConfig,
 	inventory inventory.InventorySource,
 	eol eol.Provider,
 	policy policy.VersionPolicy,
