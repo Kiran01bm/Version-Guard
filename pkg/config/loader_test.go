@@ -21,7 +21,6 @@ resources:
     cloud_provider: aws
     inventory:
       source: wiz
-      report_id_env: WIZ_AURORA_POSTGRESQL_REPORT_ID
       native_type_pattern: "rds/AmazonAuroraPostgreSQL/cluster"
       field_mappings:
         engine: "typeFields.kind"
@@ -56,7 +55,6 @@ resources:
 
 	// Verify inventory config
 	assert.Equal(t, "wiz", res.Inventory.Source)
-	assert.Equal(t, "WIZ_AURORA_POSTGRESQL_REPORT_ID", res.Inventory.ReportIDEnv)
 	assert.Equal(t, "rds/AmazonAuroraPostgreSQL/cluster", res.Inventory.NativeTypePattern)
 	assert.Len(t, res.Inventory.FieldMappings, 6)
 	assert.Equal(t, "typeFields.kind", res.Inventory.FieldMappings["engine"])
@@ -79,7 +77,6 @@ resources:
     cloud_provider: aws
     inventory:
       source: wiz
-      report_id_env: WIZ_AURORA_POSTGRESQL_REPORT_ID
       native_type_pattern: "rds/AmazonAuroraPostgreSQL/cluster"
       field_mappings:
         version: "versionDetails.version"
@@ -92,7 +89,6 @@ resources:
     cloud_provider: aws
     inventory:
       source: wiz
-      report_id_env: WIZ_EKS_REPORT_ID
       native_type_pattern: "eks/Cluster"
       field_mappings:
         version: "versionDetails.version"

@@ -1,6 +1,82 @@
 version: v1
-resources: []
-  # Add resources using the add-version-guard-resource skill
+resources:
+  - id: aurora-postgresql
+    type: aurora
+    cloud_provider: aws
+    inventory:
+      source: wiz
+      native_type_pattern: "rds/AmazonAuroraPostgreSQL/cluster"
+      field_mappings:
+        engine: "typeFields.kind"
+        version: "versionDetails.version"
+        region: "region"
+        account_id: "cloudAccount.externalId"
+        name: "name"
+        external_id: "externalId"
+    eol:
+      provider: endoflife-date
+      product: amazon-aurora-postgresql
+      schema: standard
+
+  - id: aurora-mysql
+    type: aurora
+    cloud_provider: aws
+    inventory:
+      source: wiz
+      native_type_pattern: "rds/AmazonAuroraMySQL/cluster"
+      field_mappings:
+        engine: "typeFields.kind"
+        version: "versionDetails.version"
+        region: "region"
+        account_id: "cloudAccount.externalId"
+        name: "name"
+        external_id: "externalId"
+    eol:
+      provider: endoflife-date
+      product: amazon-aurora-mysql
+      schema: standard
+
+  - id: eks
+    type: eks
+    cloud_provider: aws
+    inventory:
+      source: wiz
+      native_type_pattern: "cluster"
+      field_mappings:
+        version: "versionDetails.version"
+        region: "region"
+        account_id: "cloudAccount.externalId"
+        name: "name"
+        external_id: "externalId"
+    eol:
+      provider: endoflife-date
+      product: amazon-eks
+      schema: eks_adapter
+
+  - id: elasticache-redis
+    type: elasticache
+    cloud_provider: aws
+    inventory:
+      source: wiz
+      native_type_pattern: "elastiCache/*/cluster"
+      field_mappings:
+        engine: "typeFields.kind"
+        version: "versionDetails.version"
+        region: "region"
+        account_id: "cloudAccount.externalId"
+        name: "name"
+        external_id: "externalId"
+    eol:
+      provider: endoflife-date
+      product: redis
+      schema: standard
+
+  # Add more resources using the add-version-guard-resource skill
+  #
+  # Configuration:
+  # 1. Add resource definitions below
+  # 2. Set WIZ_REPORT_IDS environment variable with JSON map of resource ID to report ID
+  #    Example: WIZ_REPORT_IDS='{"aurora-postgresql":"report-123","eks":"report-456"}'
   #
   # Example: Aurora PostgreSQL (Standard Schema)
   # - id: aurora-postgresql
@@ -8,7 +84,6 @@ resources: []
   #   cloud_provider: aws
   #   inventory:
   #     source: wiz
-  #     report_id_env: WIZ_AURORA_POSTGRESQL_REPORT_ID
   #     native_type_pattern: "rds/AmazonAuroraPostgreSQL/cluster"
   #     field_mappings:
   #       engine: "typeFields.kind"
@@ -28,7 +103,6 @@ resources: []
   #   cloud_provider: aws
   #   inventory:
   #     source: wiz
-  #     report_id_env: WIZ_EKS_REPORT_ID
   #     native_type_pattern: "eks/Cluster"
   #     field_mappings:
   #       version: "versionDetails.version"
@@ -47,7 +121,6 @@ resources: []
   #   cloud_provider: aws
   #   inventory:
   #     source: wiz
-  #     report_id_env: WIZ_ELASTICACHE_REPORT_ID
   #     native_type_pattern: "elastiCache/Redis/cluster"
   #     field_mappings:
   #       engine: "typeFields.kind"

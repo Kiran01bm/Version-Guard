@@ -2,6 +2,7 @@ package wiz
 
 import (
 	"context"
+	"encoding/json"
 	"log/slog"
 	"os"
 	"strings"
@@ -67,10 +68,13 @@ func (s *GenericInventorySource) ListResources(ctx context.Context, resourceType
 		return nil, errors.Errorf("unsupported resource type: %s (expected: %s)", resourceType, s.config.Type)
 	}
 
-	// Get report ID from environment variable
-	reportID := os.Getenv(s.config.Inventory.ReportIDEnv)
+	// Get report ID from WIZ_REPORT_IDS map
+	reportID, err := getReportIDFromMap(s.config.ID)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get report ID for resource %s", s.config.ID)
+	}
 	if reportID == "" {
-		return nil, errors.Errorf("environment variable %s not set", s.config.Inventory.ReportIDEnv)
+		return nil, errors.Errorf("no report ID configured for resource %s in WIZ_REPORT_IDS map", s.config.ID)
 	}
 
 	// Determine required columns from field mappings
@@ -198,8 +202,15 @@ func (s *GenericInventorySource) parseResourceRow(
 	engine := ""
 	if engineField, ok := s.config.Inventory.FieldMappings["engine"]; ok {
 		engine = cols.col(row, engineField)
-		engine = normalizeEngine(engine, s.config.Type)
 	}
+
+	// For EKS, default to "eks" if no engine field is mapped
+	if s.config.Type == "eks" && engine == "" {
+		engine = "eks"
+	}
+
+	// Normalize engine
+	engine = normalizeEngine(engine, s.config.Type)
 
 	// Parse tags to extract service, brand
 	tagsJSON := cols.col(row, colHeaderTags)
@@ -242,6 +253,29 @@ func (s *GenericInventorySource) parseResourceRow(
 	}
 
 	return resource, nil
+}
+
+// getReportIDFromMap reads the WIZ_REPORT_IDS JSON map and returns the report ID for the given resource
+func getReportIDFromMap(resourceID string) (string, error) {
+	// Read WIZ_REPORT_IDS environment variable
+	reportIDsJSON := os.Getenv("WIZ_REPORT_IDS")
+	if reportIDsJSON == "" {
+		return "", errors.New("WIZ_REPORT_IDS environment variable not set")
+	}
+
+	// Parse JSON map
+	var reportIDs map[string]string
+	if err := json.Unmarshal([]byte(reportIDsJSON), &reportIDs); err != nil {
+		return "", errors.Wrap(err, "failed to parse WIZ_REPORT_IDS JSON")
+	}
+
+	// Get report ID for this resource
+	reportID, ok := reportIDs[resourceID]
+	if !ok {
+		return "", nil // Not found in map, but not an error - let caller decide
+	}
+
+	return reportID, nil
 }
 
 // normalizeEngine normalizes engine names based on resource type

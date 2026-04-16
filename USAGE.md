@@ -140,9 +140,11 @@ export GRPC_PORT=8080
 # Optional: Configure Wiz (otherwise uses mock data)
 export WIZ_CLIENT_ID_SECRET=your-client-id
 export WIZ_CLIENT_SECRET_SECRET=your-client-secret
-export WIZ_AURORA_REPORT_ID=your-report-id
-export WIZ_ELASTICACHE_REPORT_ID=your-report-id
-export WIZ_EKS_REPORT_ID=your-report-id
+export WIZ_REPORT_IDS='{
+  "aurora-mysql":"your-aurora-report-id",
+  "eks":"your-eks-report-id",
+  "elasticache-redis":"your-elasticache-report-id"
+}'
 
 # Optional: Configure S3 snapshots
 export S3_BUCKET=version-guard-snapshots
@@ -466,9 +468,7 @@ WIZ_CLIENT_SECRET_SECRET=your-wiz-client-secret-here
 WIZ_CACHE_TTL_HOURS=1
 
 # Wiz Saved Report IDs
-WIZ_AURORA_REPORT_ID=your-aurora-report-id
-WIZ_ELASTICACHE_REPORT_ID=your-elasticache-report-id
-WIZ_EKS_REPORT_ID=your-eks-report-id
+WIZ_REPORT_IDS='{"aurora-mysql":"your-report-id","eks":"your-report-id","elasticache-redis":"your-report-id"}'
 
 # AWS Configuration
 AWS_REGION=us-west-2

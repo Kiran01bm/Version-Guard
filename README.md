@@ -62,20 +62,25 @@ Version Guard implements a **two-stage detection pipeline**:
 
 ## 📦 Supported Resources
 
-| Resource | Inventory | EOL Source | Code | Status |
-|----------|-----------|------------|------|--------|
-| **EKS** (Kubernetes) | Wiz | [amazon-eks](https://endoflife.date/amazon-eks) | ✅ Implemented | ✅ Working |
-| **ElastiCache** (Redis/Valkey) | Wiz | [amazon-elasticache-redis](https://endoflife.date/amazon-elasticache-redis), [valkey](https://endoflife.date/valkey) | ✅ Implemented | ✅ Working |
-| **Aurora PostgreSQL** | Wiz | [amazon-aurora-postgresql](https://endoflife.date/amazon-aurora-postgresql) | ✅ Implemented | 🔜 Needs Wiz report with PostgreSQL data |
-| **Aurora MySQL** | Wiz | [amazon-aurora-mysql](https://endoflife.date/amazon-aurora-mysql) | ✅ Implemented | 🔜 EOL data pending [endoflife.date#9534](https://github.com/endoflife-date/endoflife.date/pull/9534) |
-| **RDS MySQL** | — | [amazon-rds-mysql](https://endoflife.date/amazon-rds-mysql) | ❌ Needs Wiz report | 📋 Planned |
-| **RDS PostgreSQL** | — | [amazon-rds-postgresql](https://endoflife.date/amazon-rds-postgresql) | ❌ Needs Wiz report | 📋 Planned |
-| **OpenSearch** | — | [amazon-opensearch](https://endoflife.date/amazon-opensearch) | ❌ Needs Wiz report | 📋 Planned |
-| **Lambda** | — | [aws-lambda](https://endoflife.date/aws-lambda) | ❌ Needs Wiz report | 📋 Planned |
+Version Guard uses a **config-driven approach** - resources are defined in `config/resources.yaml`:
 
-Adding a new resource type requires:
-1. A Wiz saved report + inventory source (~100 lines)
-2. One line in `ProductMapping` to map the engine name to endoflife.date
+| Resource | Inventory | EOL Source | Status |
+|----------|-----------|------------|--------|
+| **EKS** (Kubernetes) | Wiz | [amazon-eks](https://endoflife.date/amazon-eks) | ✅ Production tested (155 clusters) |
+| **ElastiCache** (Redis/Valkey/Memcached) | Wiz | [amazon-elasticache-redis](https://endoflife.date/amazon-elasticache-redis), [valkey](https://endoflife.date/valkey) | ✅ Production tested (3,974 clusters) |
+| **Aurora MySQL** | Wiz | [amazon-aurora-mysql](https://endoflife.date/amazon-aurora-mysql) | ⚠️ Tested (4,257 clusters), EOL data pending [endoflife.date#9534](https://github.com/endoflife-date/endoflife.date/pull/9534) |
+| **Aurora PostgreSQL** | Wiz | [amazon-aurora-postgresql](https://endoflife.date/amazon-aurora-postgresql) | 🔜 Config ready, needs Wiz report ID |
+| **RDS MySQL** | — | [amazon-rds-mysql](https://endoflife.date/amazon-rds-mysql) | 📋 Planned (add to config) |
+| **RDS PostgreSQL** | — | [amazon-rds-postgresql](https://endoflife.date/amazon-rds-postgresql) | 📋 Planned (add to config) |
+| **OpenSearch** | — | [amazon-opensearch](https://endoflife.date/amazon-opensearch) | 📋 Planned (add to config) |
+| **Lambda** | — | [aws-lambda](https://endoflife.date/aws-lambda) | 📋 Planned (add to config) |
+
+**Adding a new resource type requires:**
+1. A Wiz saved report for the resource type
+2. Adding ~15 lines to `config/resources.yaml`
+3. Adding the report ID to `WIZ_REPORT_IDS` environment variable
+
+**No code changes needed!** See [USAGE.md](./USAGE.md) for details.
 
 ## 🚀 Quick Start
 
@@ -110,9 +115,11 @@ docker compose up --build
 # With real Wiz inventory
 export WIZ_CLIENT_ID_SECRET="your-client-id"
 export WIZ_CLIENT_SECRET_SECRET="your-client-secret"
-export WIZ_EKS_REPORT_ID="your-report-id"
-export WIZ_AURORA_REPORT_ID="your-report-id"
-export WIZ_ELASTICACHE_REPORT_ID="your-report-id"
+export WIZ_REPORT_IDS='{
+  "aurora-mysql":"your-aurora-mysql-report-id",
+  "eks":"your-eks-report-id",
+  "elasticache-redis":"your-elasticache-report-id"
+}'
 docker compose up --build
 ```
 
@@ -144,7 +151,7 @@ make dev
 # Or with real Wiz inventory (requires credentials)
 export WIZ_CLIENT_ID_SECRET="your-client-id"
 export WIZ_CLIENT_SECRET_SECRET="your-client-secret"
-export WIZ_AURORA_REPORT_ID="your-report-id"
+export WIZ_REPORT_IDS='{"aurora-mysql":"report-id","eks":"report-id","elasticache-redis":"report-id"}'
 make dev
 ```
 
@@ -202,6 +209,8 @@ Version Guard is configured via environment variables or CLI flags:
 | `AWS_REGION` | AWS region (for S3 snapshots) | `us-west-2` |
 | `WIZ_CLIENT_ID_SECRET` | Wiz client ID (optional) | - |
 | `WIZ_CLIENT_SECRET_SECRET` | Wiz client secret (optional) | - |
+| `WIZ_REPORT_IDS` | JSON map of resource ID to Wiz report ID (optional) | - |
+| `CONFIG_PATH` | Path to resources config file | `config/resources.yaml` |
 | `TAG_APP_KEYS` | Comma-separated AWS tag keys for app/service | `app,application,service` |
 | `TAG_ENV_KEYS` | Comma-separated AWS tag keys for environment | `environment,env` |
 | `TAG_BRAND_KEYS` | Comma-separated AWS tag keys for brand/business unit | `brand` |
@@ -220,6 +229,23 @@ export TAG_APP_KEYS="team,squad,application"
 ```
 
 The tag keys are tried in order — the first matching tag wins.
+
+**Wiz Report IDs:**
+
+Version Guard uses a single JSON map to configure all Wiz report IDs:
+
+```bash
+export WIZ_REPORT_IDS='{
+  "aurora-mysql": "7bac4838-cf54-46c4-93a2-f63cced1735a",
+  "eks": "ea80a1a4-fd1d-4c8c-9a69-0726f626040b",
+  "elasticache-redis": "d8084ea6-cdcc-4ee7-bb46-067b52982c11"
+}'
+```
+
+The keys correspond to resource IDs in `config/resources.yaml`. This approach:
+- ✅ Scales to dozens of resources without env var sprawl
+- ✅ Single environment variable to manage
+- ✅ Easy to add new resources (just add to JSON map)
 
 **Logging:**
 
