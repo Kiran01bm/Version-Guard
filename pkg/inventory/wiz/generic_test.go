@@ -326,6 +326,10 @@ func TestParseResourceRow(t *testing.T) {
 	assert.Equal(t, "aurora-postgresql", resource.Engine)
 	assert.Equal(t, "my-service", resource.Service)
 	assert.Equal(t, "afterpay", resource.Brand)
+	// Verify all tags are stored
+	assert.NotNil(t, resource.Tags)
+	assert.Equal(t, "my-service", resource.Tags["app"])
+	assert.Equal(t, "afterpay", resource.Tags["brand"])
 }
 
 func TestParseResourceRow_MissingRequiredFields(t *testing.T) {
