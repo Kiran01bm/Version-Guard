@@ -8,9 +8,9 @@ metadata:
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: grpc
+    - port: {{ .Values.service.adminPort }}
+      targetPort: http-admin
       protocol: TCP
-      name: grpc
+      name: http-admin
   selector:
     {{- include "version-guard.selectorLabels" . | nindent 4 }}

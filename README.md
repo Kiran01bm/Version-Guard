@@ -51,7 +51,7 @@ Version Guard implements a **two-stage detection pipeline**:
 - **EOL Data**: [endoflife.date](https://endoflife.date) API — no cloud provider credentials needed
 - **Classification**: Red (EOL/deprecated), Yellow (extended support/approaching EOL), Green (current)
 - **S3 Snapshots**: Versioned JSON storage for audit trail and downstream consumption
-- **gRPC API**: Query interface for compliance dashboards
+- **HTTP Admin API**: Trigger scans and query status
 
 ## ✨ Features
 
@@ -132,7 +132,7 @@ docker compose up --build
 | `temporal` | Workflow orchestration | `7233` (gRPC), `8233` (Web UI) |
 | `minio` | S3-compatible snapshot storage | `9000` (API), `9001` (Console) |
 | `endoflife` | Local EOL data override (nginx) | `8082` |
-| `version-guard` | The server | `8080` (gRPC) |
+| `version-guard` | The server | `8081` (HTTP admin) |
 
 The `endoflife` service serves patched EOL data for products with pending upstream PRs on [endoflife.date](https://endoflife.date), and proxies everything else to the live API. See [`deploy/endoflife-override/README.md`](./deploy/endoflife-override/README.md) for details on adding or updating overrides.
 
@@ -162,10 +162,34 @@ make dev
 
 ### Trigger a Scan
 
-**Start a detection workflow:**
+**Via the HTTP admin endpoint (recommended):**
 
 ```bash
-# Via Temporal CLI (from inside the temporal container if using docker-compose)
+# Full fleet scan
+curl -X POST http://localhost:8081/scan
+
+# Targeted scan (specific resource types only)
+curl -X POST http://localhost:8081/scan \
+  -H 'Content-Type: application/json' \
+  -d '{"resource_types":["aurora-mysql","eks"]}'
+```
+
+**Via the CLI:**
+
+```bash
+# Full fleet scan
+./bin/version-guard-cli scan start
+
+# Targeted scan, wait for completion
+./bin/version-guard-cli scan start \
+  --resource-type aurora-mysql --resource-type eks \
+  --wait
+```
+
+**Via Temporal directly:**
+
+```bash
+# Temporal CLI (from inside the temporal container if using docker-compose)
 docker compose exec temporal temporal workflow start \
   --task-queue version-guard-detection \
   --type OrchestratorWorkflow \
@@ -179,11 +203,6 @@ docker compose exec temporal temporal workflow start \
 **Monitor workflow execution:**
 
 ```bash
-# Check workflow status (replace WORKFLOW_ID with the ID from the start command)
-docker compose exec temporal temporal workflow describe \
-  --workflow-id <WORKFLOW_ID> \
-  --namespace version-guard-dev
-
 # Watch Version Guard logs in real-time
 docker compose logs --follow version-guard
 
@@ -219,11 +238,6 @@ docker compose logs version-guard | grep "Snapshot created"
 ### Query Findings
 
 ```bash
-# Using gRPC
-grpcurl -plaintext localhost:8080 list
-grpcurl -plaintext localhost:8080 \
-  block.versionguard.VersionGuard/GetFleetSummary
-
 # Using the CLI
 ./bin/version-guard-cli service list
 ./bin/version-guard-cli finding list
@@ -236,7 +250,7 @@ grpcurl -plaintext localhost:8080 \
 make test
 
 # Run specific package tests
-go test ./pkg/detector/aurora -v
+go test ./pkg/detector/generic -v
 go test ./pkg/policy -v
 
 # Run with coverage
@@ -251,7 +265,7 @@ Version Guard is configured via environment variables or CLI flags:
 |----------|-------------|---------|
 | `TEMPORAL_ENDPOINT` | Temporal server address | `localhost:7233` |
 | `TEMPORAL_NAMESPACE` | Temporal namespace | `version-guard-dev` |
-| `GRPC_PORT` | gRPC service port | `8080` |
+| `HTTP_PORT` | HTTP admin port (`POST /scan`) | `8081` |
 | `S3_BUCKET` | S3 bucket for snapshots | `version-guard-snapshots` |
 | `AWS_REGION` | AWS region (for S3 snapshots) | `us-west-2` |
 | `WIZ_CLIENT_ID_SECRET` | Wiz client ID (optional) | - |
@@ -422,24 +436,6 @@ s3://your-bucket/snapshots/latest.json
 - AWS Lambda triggered on S3 events
 - Scheduled cron job reading `latest.json`
 - Custom Temporal workflow (implement `Stage 3: ACT`)
-
-### 3. Using the gRPC API
-
-Version Guard exposes a gRPC API for querying compliance data:
-
-```bash
-# List services and their compliance scores
-grpcurl -plaintext localhost:8080 \
-  block.versionguard.VersionGuard/GetFleetSummary
-
-# Get specific service score
-grpcurl -plaintext -d '{"service":"my-service"}' \
-  localhost:8080 block.versionguard.VersionGuard/GetServiceScore
-
-# List all RED/YELLOW findings
-grpcurl -plaintext -d '{"status":"red"}' \
-  localhost:8080 block.versionguard.VersionGuard/ListFindings
-```
 
 ## 📖 Documentation
 
