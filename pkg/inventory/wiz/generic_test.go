@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 
 	"github.com/block/Version-Guard/pkg/config"
@@ -193,6 +194,18 @@ func TestMatchesNativeTypePattern(t *testing.T) {
 			pattern:     "eks/Cluster",
 			nativeType:  "eks/Cluster",
 			shouldMatch: true,
+		},
+		{
+			name:        "Lambda exact match",
+			pattern:     "lambda",
+			nativeType:  "lambda",
+			shouldMatch: true,
+		},
+		{
+			name:        "Lambda no match - different type",
+			pattern:     "lambda",
+			nativeType:  "lambda/Python/function",
+			shouldMatch: false,
 		},
 	}
 
@@ -481,6 +494,260 @@ func TestGetResource(t *testing.T) {
 	_, err := source.GetResource(ctx, types.ResourceType("aurora"), "test-id")
 
 	assert.Error(t, err)
+}
+
+func TestExtractLambdaRuntime(t *testing.T) {
+	tests := []struct {
+		name     string
+		json     string
+		expected string
+	}{
+		{
+			name:     "Python runtime",
+			json:     `{"runtime":"python3.12","memorySize":256}`,
+			expected: "python3.12",
+		},
+		{
+			name:     "Node.js runtime",
+			json:     `{"runtime":"nodejs20.x","memorySize":512}`,
+			expected: "nodejs20.x",
+		},
+		{
+			name:     "Java runtime",
+			json:     `{"runtime":"java21","memorySize":1024}`,
+			expected: "java21",
+		},
+		{
+			name:     "Custom runtime provided.al2023",
+			json:     `{"runtime":"provided.al2023","memorySize":128}`,
+			expected: "provided.al2023",
+		},
+		{
+			name:     "Custom runtime provided.al2",
+			json:     `{"runtime":"provided.al2","memorySize":128}`,
+			expected: "provided.al2",
+		},
+		{
+			name:     "Dotnet runtime",
+			json:     `{"runtime":"dotnet8","memorySize":512}`,
+			expected: "dotnet8",
+		},
+		{
+			name:     "Ruby runtime",
+			json:     `{"runtime":"ruby3.3","memorySize":256}`,
+			expected: "ruby3.3",
+		},
+		{
+			name:     "No runtime field",
+			json:     `{"memorySize":256}`,
+			expected: "",
+		},
+		{
+			name:     "Empty JSON",
+			json:     "",
+			expected: "",
+		},
+		{
+			name:     "Invalid JSON",
+			json:     "not json",
+			expected: "",
+		},
+		{
+			name:     "Runtime is not a string",
+			json:     `{"runtime":123}`,
+			expected: "",
+		},
+		{
+			name:     "Runtime with whitespace",
+			json:     `{"runtime":"  python3.12  "}`,
+			expected: "python3.12",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractLambdaRuntime(tt.json)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestParseResourceRow_Lambda(t *testing.T) {
+	cfg := config.ResourceConfig{
+		ID:            "lambda",
+		Type:          "lambda",
+		CloudProvider: "aws",
+		Inventory: config.InventoryConfig{
+			FieldMappings: map[string]string{
+				"region":      "region",
+				"account_id":  "cloudAccount.externalId",
+				"name":        "name",
+				"external_id": "externalId",
+			},
+		},
+	}
+
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
+
+	cols := columnIndex{
+		colHeaderExternalID:      0,
+		colHeaderName:            1,
+		colHeaderAccountID:       2,
+		colHeaderRegion:          3,
+		colHeaderTags:            4,
+		colHeaderGraphProperties: 5,
+	}
+
+	tagsJSON := `[{"key":"app","value":"my-function"},{"key":"brand","value":"brand-a"}]`
+
+	row := []string{
+		"arn:aws:lambda:us-east-1:123456789012:function:my-func", // external_id
+		"my-func",      // name
+		"123456789012", // account_id
+		"us-east-1",    // region
+		tagsJSON,       // tags
+		`{"runtime":"python3.12","memorySize":256}`, // graphEntity.properties
+	}
+
+	ctx := context.Background()
+	resource, err := source.parseResourceRow(ctx, cols, row)
+
+	require.NoError(t, err)
+	assert.Equal(t, "arn:aws:lambda:us-east-1:123456789012:function:my-func", resource.ID)
+	assert.Equal(t, "my-func", resource.Name)
+	assert.Equal(t, types.ResourceType("lambda"), resource.Type)
+	assert.Equal(t, types.CloudProviderAWS, resource.CloudProvider)
+	assert.Equal(t, "123456789012", resource.CloudAccountID)
+	assert.Equal(t, "us-east-1", resource.CloudRegion)
+	assert.Equal(t, "python3.12", resource.CurrentVersion)
+	assert.Equal(t, "aws-lambda", resource.Engine)
+	assert.Equal(t, "my-function", resource.Service)
+	assert.Equal(t, "brand-a", resource.Brand)
+}
+
+func TestParseResourceRow_LambdaNoRuntime(t *testing.T) {
+	cfg := config.ResourceConfig{
+		ID:            "lambda",
+		Type:          "lambda",
+		CloudProvider: "aws",
+		Inventory: config.InventoryConfig{
+			FieldMappings: map[string]string{
+				"region":      "region",
+				"account_id":  "cloudAccount.externalId",
+				"name":        "name",
+				"external_id": "externalId",
+			},
+		},
+	}
+
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
+
+	cols := columnIndex{
+		colHeaderExternalID:      0,
+		colHeaderName:            1,
+		colHeaderAccountID:       2,
+		colHeaderRegion:          3,
+		colHeaderTags:            4,
+		colHeaderGraphProperties: 5,
+	}
+
+	row := []string{
+		"arn:aws:lambda:us-east-1:123456789012:function:no-runtime",
+		"no-runtime",
+		"123456789012",
+		"us-east-1",
+		"[]",
+		`{"memorySize":256}`, // No runtime field
+	}
+
+	ctx := context.Background()
+	resource, err := source.parseResourceRow(ctx, cols, row)
+
+	// Container-image Lambdas (runtime=null) are skipped — AWS doesn't EOL them
+	require.NoError(t, err)
+	assert.Nil(t, resource)
+}
+
+func TestGetRequiredColumns_Lambda(t *testing.T) {
+	cfg := config.ResourceConfig{
+		Type: "lambda",
+		Inventory: config.InventoryConfig{
+			FieldMappings: map[string]string{
+				"region":      "region",
+				"account_id":  "cloudAccount.externalId",
+				"name":        "name",
+				"external_id": "externalId",
+			},
+		},
+	}
+
+	source := NewGenericInventorySource(&Client{}, &cfg, nil, nil)
+	columns := source.getRequiredColumns()
+
+	// Should include graphEntity.properties for Lambda
+	assert.Contains(t, columns, colHeaderGraphProperties)
+}
+
+func TestListResources_LambdaFixture(t *testing.T) {
+	// End-to-end test using the Lambda CSV fixture data.
+	// Fixture nativeTypes are "lambda" (exact match), matching production Wiz data.
+	mockWizClient := new(MockWizClient)
+	mockWizClient.On("GetAccessToken", mock.Anything).Return("test-token", nil)
+	mockWizClient.On("GetReport", mock.Anything, "test-token", "lambda-report-id").
+		Return(WizAPIFixtures.LambdaReport, nil)
+	mockWizClient.On("DownloadReport", mock.Anything, WizAPIFixtures.LambdaReport.DownloadURL).
+		Return(NewMockReadCloser(WizAPIFixtures.LambdaCSVData), nil)
+
+	wizClient := NewClient(mockWizClient, time.Hour)
+
+	reportIDs := map[string]string{"lambda": "lambda-report-id"}
+	reportIDsJSON, _ := json.Marshal(reportIDs)
+	os.Setenv("WIZ_REPORT_IDS", string(reportIDsJSON))
+	defer os.Unsetenv("WIZ_REPORT_IDS")
+
+	cfg := config.ResourceConfig{
+		ID:            "lambda",
+		Type:          "lambda",
+		CloudProvider: "aws",
+		Inventory: config.InventoryConfig{
+			NativeTypePattern: "lambda",
+			FieldMappings: map[string]string{
+				"region":      "region",
+				"account_id":  "cloudAccount.externalId",
+				"name":        "name",
+				"external_id": "externalId",
+			},
+		},
+	}
+
+	source := NewGenericInventorySource(wizClient, &cfg, nil, nil)
+
+	resources, err := source.ListResources(context.Background(), types.ResourceTypeLambda)
+	require.NoError(t, err)
+
+	// 4 of 5 fixture rows have a runtime; the no-runtime row is skipped
+	// because container-image Lambdas are out of scope for EOL detection.
+	require.Len(t, resources, 4)
+
+	// Verify runtime extraction for each resource
+	runtimeMap := make(map[string]string)
+	for _, r := range resources {
+		runtimeMap[r.Name] = r.CurrentVersion
+	}
+
+	assert.Equal(t, "python3.8", runtimeMap["legacy-python38"])
+	assert.Equal(t, "nodejs20.x", runtimeMap["billing-node20"])
+	assert.Equal(t, "java21", runtimeMap["payments-java21"])
+	assert.Equal(t, "provided.al2023", runtimeMap["custom-runtime"])
+	// no-runtime-props is excluded — container-image Lambda, no EOL to track
+	assert.Empty(t, runtimeMap["no-runtime-props"])
+
+	// All returned resources should have engine "aws-lambda"
+	for _, r := range resources {
+		assert.Equal(t, "aws-lambda", r.Engine, "resource %s should have engine aws-lambda", r.Name)
+	}
+
+	mockWizClient.AssertExpectations(t)
 }
 
 func TestParseResourceRow_WithContextTime(t *testing.T) {
