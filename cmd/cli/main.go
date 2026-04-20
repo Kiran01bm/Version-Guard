@@ -1,9 +1,14 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/alecthomas/kong"
+	"go.temporal.io/sdk/client"
+
+	"github.com/block/Version-Guard/pkg/scan"
+	"github.com/block/Version-Guard/pkg/types"
 )
 
 var version = "dev"
@@ -15,12 +20,18 @@ type CLI struct {
 	Version  VersionCmd  `cmd:"" help:"Show version information"`
 	Service  ServiceCmd  `cmd:"" help:"Check service compliance"`
 	Finding  FindingCmd  `cmd:"" help:"Manage findings"`
-	Workflow WorkflowCmd `cmd:"" help:"Manage Temporal workflows"`
+	Scan     ScanCmd     `cmd:"" help:"Trigger and manage scans"`
+	Workflow WorkflowCmd `cmd:"" help:"Inspect Temporal workflow runs"`
 	Debug    DebugCmd    `cmd:"" help:"Debug commands for troubleshooting"`
 
 	// Global flags
 	Endpoint string `help:"Version Guard gRPC endpoint" default:"localhost:8080" env:"VERSION_GUARD_ENDPOINT"`
 	Verbose  bool   `short:"v" help:"Enable verbose logging"`
+
+	// Temporal connection flags (used by workflow commands)
+	TemporalEndpoint  string `help:"Temporal server endpoint" default:"localhost:7233" env:"TEMPORAL_ENDPOINT"`
+	TemporalNamespace string `help:"Temporal namespace" default:"version-guard-dev" env:"TEMPORAL_NAMESPACE"`
+	TemporalTaskQueue string `help:"Temporal task queue" default:"version-guard-detection" env:"TEMPORAL_TASK_QUEUE"`
 }
 
 // VersionCmd shows version information
@@ -169,41 +180,70 @@ func (c *FindingExportCmd) Run(_ *Context) error {
 	return nil
 }
 
-// WorkflowCmd manages Temporal workflows
-//
-//nolint:govet // field alignment sacrificed for logical grouping
-type WorkflowCmd struct {
-	Start  WorkflowStartCmd  `cmd:"" help:"Start a detection workflow"`
-	Status WorkflowStatusCmd `cmd:"" help:"Check workflow status"`
-	List   WorkflowListCmd   `cmd:"" help:"List recent workflow runs"`
+// ScanCmd triggers scans and manages scan execution.
+type ScanCmd struct {
+	Start ScanStartCmd `cmd:"" help:"Trigger a scan (full fleet or targeted)"`
 }
 
-// WorkflowStartCmd starts a workflow
-type WorkflowStartCmd struct {
-	ResourceType  string `help:"Resource type to scan (aurora, elasticache, etc.)" required:""`
-	CloudProvider string `help:"Cloud provider (aws, gcp, azure)" default:"aws"`
-	Wait          bool   `help:"Wait for workflow to complete"`
+// ScanStartCmd triggers an OrchestratorWorkflow run.
+// Omit --resource-type to scan every configured resource; pass it one or
+// more times (or comma-separate) to run a targeted scan.
+type ScanStartCmd struct {
+	ScanID       string   `help:"Correlation ID for this scan (auto-generated if empty)"`
+	ResourceType []string `help:"Resource config ID to scan (repeatable, e.g. aurora-mysql,eks). Empty = full scan."`
+	Wait         bool     `help:"Wait for workflow to complete"`
 }
 
-//nolint:unparam // error return required by kong interface
-func (c *WorkflowStartCmd) Run(_ *Context) error {
-	fmt.Printf("Starting detection workflow...\n")
-	fmt.Printf("  Resource Type: %s\n", c.ResourceType)
-	fmt.Printf("  Cloud Provider: %s\n", c.CloudProvider)
+func (c *ScanStartCmd) Run(ctx *Context) error {
+	temporalClient, err := client.Dial(client.Options{
+		HostPort:  ctx.TemporalEndpoint,
+		Namespace: ctx.TemporalNamespace,
+	})
+	if err != nil {
+		return fmt.Errorf("connect to Temporal at %s: %w", ctx.TemporalEndpoint, err)
+	}
+	defer temporalClient.Close()
 
-	// TODO: Connect to Temporal and start workflow
-	scanID := "scan-123456"
-	fmt.Printf("\n✓ Workflow started: %s\n", scanID)
+	resourceTypes := make([]types.ResourceType, 0, len(c.ResourceType))
+	for _, rt := range c.ResourceType {
+		resourceTypes = append(resourceTypes, types.ResourceType(rt))
+	}
+
+	trigger := scan.NewTrigger(temporalClient, ctx.TemporalTaskQueue)
+	res, err := trigger.Run(context.Background(), scan.Input{
+		ScanID:        c.ScanID,
+		ResourceTypes: resourceTypes,
+	})
+	if err != nil {
+		return fmt.Errorf("trigger scan: %w", err)
+	}
+
+	scope := "all configured resources"
+	if len(resourceTypes) > 0 {
+		scope = fmt.Sprintf("%v", resourceTypes)
+	}
+	fmt.Printf("✓ Scan started\n")
+	fmt.Printf("  Scope:       %s\n", scope)
+	fmt.Printf("  Scan ID:     %s\n", res.ScanID)
+	fmt.Printf("  Workflow ID: %s\n", res.WorkflowID)
+	fmt.Printf("  Run ID:      %s\n", res.RunID)
 
 	if c.Wait {
-		fmt.Println("Waiting for workflow to complete...")
-		// TODO: Poll workflow status
+		fmt.Println("\nWaiting for workflow to complete...")
+		run := temporalClient.GetWorkflow(context.Background(), res.WorkflowID, res.RunID)
+		if err := run.Get(context.Background(), nil); err != nil {
+			return fmt.Errorf("workflow failed: %w", err)
+		}
 		fmt.Println("✓ Workflow completed successfully")
-		fmt.Println("  Findings: 25")
-		fmt.Println("  Duration: 45s")
 	}
 
 	return nil
+}
+
+// WorkflowCmd inspects Temporal workflow runs.
+type WorkflowCmd struct {
+	Status WorkflowStatusCmd `cmd:"" help:"Check workflow status"`
+	List   WorkflowListCmd   `cmd:"" help:"List recent workflow runs"`
 }
 
 // WorkflowStatusCmd checks workflow status
